@@ -25,6 +25,18 @@ class Provider(str, Enum):
     QWEN = "qwen"
 
 
+class PlannerMode(str, Enum):
+    RECIPE = "recipe"
+    QWEN = "qwen"
+    AUTO = "auto"
+
+
+class StructuredOutputMode(str, Enum):
+    JSON_SCHEMA = "json_schema"
+    JSON_OBJECT = "json_object"
+    OFF = "off"
+
+
 @app.callback()
 def main():
     """保留显式 plan 子命令，即使当前只有一个子命令。"""
@@ -51,6 +63,8 @@ def plan(
         Provider,
         typer.Option(help="模型 Provider；fake 离线可测，qwen 使用 OpenAI-compatible HTTP。"),
     ] = Provider.FAKE,
+    planner: Annotated[PlannerMode, typer.Option(help="技能规划模式：recipe 默认确定性展开，qwen 实验模式，auto 自动选择。")] = PlannerMode.RECIPE,
+    structured_output: Annotated[StructuredOutputMode, typer.Option(help="Qwen 结构化输出模式：json_schema、json_object 或 off。")]=StructuredOutputMode.JSON_SCHEMA,
     qwen_base_url: Annotated[
         str | None,
         typer.Option(help="Qwen API 根地址，例如 http://localhost:8000/v1；也可用 QWEN_BASE_URL。"),
@@ -78,11 +92,12 @@ def plan(
             base_url=base_url,
             model=model,
             api_key=os.environ.get("QWEN_API_KEY", ""),
+            use_structured_output=structured_output.value,
         )
         engine = PipelineEngine(understanding=qwen, vision=qwen, planner=qwen)
     try:
         result = engine.plan(
-            instruction, robot=robot.value, scene=scene, seed=seed, output_dir=output_dir
+            instruction, robot=robot.value, scene=scene, seed=seed, output_dir=output_dir, planner=planner.value
         )
     except (OSError, ValueError, KeyError, ParseError, ValidationError) as exc:
         typer.echo(f"规划失败：{exc}", err=True)
@@ -123,6 +138,7 @@ def _print_summary(result):
     skills = " -> ".join(step["skill_name"] for step in plan.get("steps", [])) or "-"
     typer.echo(f"Atomic Skill 调用顺序：{skills}")
     typer.echo(f"模型调用次数：{getattr(result, 'model_call_count', 0)}")
+    typer.echo(f"规划器：{getattr(result, 'planner', 'recipe')} / Route {getattr(result, 'route', '-')}")
     usage = getattr(result, "model_usage", {}) or {}
     typer.echo(
         f"模型 Tokens：输入 {usage.get('prompt_tokens', 0)} / "

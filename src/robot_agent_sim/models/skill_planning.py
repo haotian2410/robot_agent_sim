@@ -16,10 +16,10 @@ class StrictModel(BaseModel):
 class PlannerOperation(StrictModel):
     id: str
     type: str
-    source: str | None = None
-    destination: str | None = None
-    target: str | None = None
-    reference: str | None = None
+    has_source: bool = False
+    has_destination: bool = False
+    has_target: bool = False
+    has_reference: bool = False
 
 
 class PlannerContext(StrictModel):
@@ -60,22 +60,19 @@ class SkillPlanningProvider(Protocol):
 
 
 def planner_context(task: GroundedTask) -> PlannerContext:
-    objects = {entity.entity_id: entity.object_id for entity in task.entities}
     operations = [PlannerOperation(
         id=operation.operation_id, type=operation.task_type.value,
-        source=objects.get(operation.source), destination=objects.get(operation.destination),
-        target=objects.get(operation.target), reference=objects.get(operation.reference),
+        has_source=operation.source is not None, has_destination=operation.destination is not None,
+        has_target=operation.target is not None, has_reference=operation.reference is not None,
     ) for operation in task.operations]
-    goals = [{
-        "subject": objects.get(relation.subject), "relation": relation.relation.value,
-        "reference": objects.get(relation.reference),
-    } for relation in task.spatial_relations if relation.scope == "goal"]
+    goals = [{"relation": relation.relation.value} for relation in task.spatial_relations if relation.scope == "goal"]
     return PlannerContext(operations=operations, goals=goals)
 
 
 def enrich_skill_plan(output: SkillPlanLLMOutput, task: GroundedTask) -> SkillPlan:
     context = planner_context(task)
-    operations = {operation.id: operation for operation in context.operations}
+    grounded = {entity.entity_id: entity.object_id for entity in task.entities}
+    operations = {operation.operation_id: operation for operation in task.operations}
     expected_ids = [operation.operation_id for operation in task.operations]
     if [operation.id for operation in output.operations] != expected_ids:
         raise ValueError("planner must preserve the exact operation order")
@@ -83,15 +80,17 @@ def enrich_skill_plan(output: SkillPlanLLMOutput, task: GroundedTask) -> SkillPl
     for operation_plan in output.operations:
         operation = operations[operation_plan.id]
         for raw in operation_plan.steps:
-            target = getattr(operation, raw.target) if raw.target else None
-            reference = getattr(operation, raw.reference) if raw.reference else None
+            target_entity = getattr(operation, raw.target) if raw.target else None
+            reference_entity = getattr(operation, raw.reference) if raw.reference else None
+            target = grounded.get(target_entity) if target_entity else None
+            reference = grounded.get(reference_entity) if reference_entity else None
             if raw.target and target is None:
-                raise ValueError(f"operation {operation.id} has no {raw.target} object")
+                raise ValueError(f"operation {operation.operation_id} has no {raw.target} object")
             if raw.reference and reference is None:
-                raise ValueError(f"operation {operation.id} has no {raw.reference} object")
+                raise ValueError(f"operation {operation.operation_id} has no {raw.reference} object")
             step_id = f"step-{len(steps) + 1}"
             steps.append(SkillStep(
-                step_id=step_id, operation_id=operation.id, skill_name=raw.skill,
+                step_id=step_id, operation_id=operation.operation_id, skill_name=raw.skill,
                 target_object=target, reference_object=reference, semantic_target=raw.region,
                 depends_on=[steps[-1].step_id] if steps else [],
             ))

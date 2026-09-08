@@ -29,7 +29,7 @@ def test_plan_subcommand_preserves_instruction_and_options(calls, tmp_path):
     ])
     assert result.exit_code == 0, result.output
     assert calls == [(instruction, {
-        "robot": "panda", "scene": None, "seed": 7, "output_dir": tmp_path,
+        "robot": "panda", "scene": None, "seed": 7, "output_dir": tmp_path, "planner": "recipe",
     })]
 
 
@@ -39,7 +39,7 @@ def test_uploaded_scene_options(calls, tmp_path):
     result = runner.invoke(cli.app, ["plan", "按按钮", "--robot", "ur5e", "--scene", str(scene)])
     assert result.exit_code == 0, result.output
     assert calls[0][1] == {
-        "robot": "ur5e", "scene": scene, "seed": 0, "output_dir": Path("var"),
+        "robot": "ur5e", "scene": scene, "seed": 0, "output_dir": Path("var"), "planner": "recipe",
     }
 
 

@@ -20,15 +20,21 @@ class ModelCallBudgetExceeded(RuntimeError):
 class ModelCallBudget:
     max_calls: int
     allowed_stages: tuple[str, ...]
+    stage_limits: dict[str, int] = field(default_factory=dict)
     calls: int = 0
     stages: list[dict] = field(default_factory=list)
 
     @classmethod
-    def for_route(cls, route_b: bool):
-        return cls(3 if route_b else 2, ("task_understanding", "vision_grounding", "skill_planning") if route_b else ("task_understanding", "skill_planning"))
+    def for_route(cls, route_b: bool, planner: str = "qwen"):
+        if planner == "recipe":
+            stages = ("task_understanding", "vision_grounding") if route_b else ("task_understanding",)
+            return cls(2 if route_b else 1, stages, {stage: 1 for stage in stages})
+        stages = ("task_understanding", "vision_grounding", "skill_planning") if route_b else ("task_understanding", "skill_planning")
+        return cls(3 if route_b else 2, stages, {stage: 1 for stage in stages})
 
     def consume(self, stage: str):
-        if stage not in self.allowed_stages or self.calls >= self.max_calls:
+        used = sum(1 for item in self.stages if item["stage"] == stage)
+        if stage not in self.allowed_stages or self.calls >= self.max_calls or (stage in self.stage_limits and used >= self.stage_limits[stage]):
             raise ModelCallBudgetExceeded(f"model call budget exceeded at {stage}")
         self.calls += 1
         self.stages.append({"stage": stage, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})

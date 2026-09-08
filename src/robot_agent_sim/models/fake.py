@@ -6,6 +6,7 @@ from ..contracts.task_intent import SpatialRelationType
 from .skill_planning import LLMOperationPlan, LLMPlanStep, SkillPlanLLMOutput
 from .task_understanding import ParseEntity, ParseOperation, ParseRelation, TaskParseLLMOutput
 from .vision_grounding import VisionCandidate, VisionLLMOutput
+from ..planning.recipes import RECIPE_DEFINITIONS
 
 
 class FakeTaskUnderstandingProvider:
@@ -75,15 +76,15 @@ class FakeTaskUnderstandingProvider:
         chained = len(letters) >= 3 and text.count("放") >= 2
         if chained:
             operations.extend([
-                ParseOperation(id="op-1", type="pick_and_place", source=letters[0].id, destination=letters[1].id),
-                ParseOperation(id="op-2", type="pick_and_place", source=letters[1].id, destination=letters[2].id),
+                ParseOperation(type="pick_and_place", source=letters[0].id, destination=letters[1].id),
+                ParseOperation(type="pick_and_place", source=letters[1].id, destination=letters[2].id),
             ])
             relations.extend([
                 ParseRelation(scope="goal", subject=letters[0].id, relation=SpatialRelationType.INSIDE, reference=letters[1].id),
                 ParseRelation(scope="goal", subject=letters[1].id, relation=SpatialRelationType.INSIDE, reference=letters[2].id),
             ])
         if chained and any(token in text or token in low for token in ("按", "press")):
-            operations.append(ParseOperation(id=f"op-{len(operations)+1}", type="press", target=letters[2].id))
+            operations.append(ParseOperation(type="press", target=letters[2].id))
         if chained:
             return TaskParseLLMOutput(status="accepted", entities=entities, operations=operations, relations=relations)
         if put:
@@ -92,23 +93,23 @@ class FakeTaskUnderstandingProvider:
             if destination is None and len(entities) > 1: destination = entities[1]
             if destination is not None:
                 if destination.category != "container" and has_right:
-                    operations.append(ParseOperation(id="op-1", type="move", target=source.id, reference=destination.id))
+                    operations.append(ParseOperation(type="move", target=source.id, reference=destination.id))
                 else:
-                    operations.append(ParseOperation(id="op-1", type="pick_and_place", source=source.id, destination=destination.id))
+                    operations.append(ParseOperation(type="pick_and_place", source=source.id, destination=destination.id))
                     relations.append(ParseRelation(scope="goal", subject=source.id, relation=SpatialRelationType.INSIDE, reference=destination.id))
         if any(token in text or token in low for token in ("按", "press")):
             button = next((entity for entity in entities if entity.category == "button"), entities[-1])
-            operations.append(ParseOperation(id=f"op-{len(operations)+1}", type="press", target=button.id))
+            operations.append(ParseOperation(type="press", target=button.id))
         elif not operations and any(token in text or token in low for token in ("移动", "移到", "move")):
-            operations.append(ParseOperation(id="op-1", type="move", target=entities[0].id, reference=entities[1].id if len(entities) > 1 else None))
+            operations.append(ParseOperation(type="move", target=entities[0].id, reference=entities[1].id if len(entities) > 1 else None))
         elif not operations and any(token in text or token in low for token in ("搜索", "寻找", "查找", "search")):
-            operations.append(ParseOperation(id="op-1", type="search", target=entities[0].id))
+            operations.append(ParseOperation(type="search", target=entities[0].id))
         elif not operations and any(token in text or token in low for token in ("定位", "找到", "locate")):
-            operations.append(ParseOperation(id="op-1", type="locate", target=entities[0].id))
+            operations.append(ParseOperation(type="locate", target=entities[0].id))
         elif not operations and any(token in text or token in low for token in ("抓", "拿", "拾", "捡", "grasp", "pick")):
-            operations.append(ParseOperation(id="op-1", type="grasp", target=entities[0].id))
+            operations.append(ParseOperation(type="grasp", target=entities[0].id))
         elif not operations and any(token in text or token in low for token in ("释放", "放开", "release")):
-            operations.append(ParseOperation(id="op-1", type="release", target=entities[0].id))
+            operations.append(ParseOperation(type="release", target=entities[0].id))
         if not operations:
             return TaskParseLLMOutput(status="unsupported_task", raw_task=text)
         return TaskParseLLMOutput(status="accepted", entities=entities, operations=operations, relations=relations)
@@ -133,19 +134,12 @@ class FakeSkillPlanningProvider:
     def plan(self, request):
         plans = []
         for operation in request.context.operations:
-            if operation.type == "pick_and_place":
-                steps = [LLMPlanStep(skill="locate", target="source"), LLMPlanStep(skill="move", target="source", region="grasp_region"), LLMPlanStep(skill="grasp", target="source"), LLMPlanStep(skill="locate", target="destination"), LLMPlanStep(skill="move", target="destination", reference="source", region="container_interior"), LLMPlanStep(skill="release", target="source", reference="destination", region="container_interior")]
-            elif operation.type == "press":
-                steps = [LLMPlanStep(skill="locate", target="target"), LLMPlanStep(skill="move", target="target", region="button_surface"), LLMPlanStep(skill="press", target="target")]
-            elif operation.type == "grasp":
-                steps = [LLMPlanStep(skill="locate", target="target"), LLMPlanStep(skill="move", target="target", region="grasp_region"), LLMPlanStep(skill="grasp", target="target")]
-            elif operation.type == "move":
-                steps = [LLMPlanStep(skill="locate", target="target"), LLMPlanStep(skill="move", target="target", reference="reference" if operation.reference else None, region="relative_region" if operation.reference else "semantic_region")]
-            elif operation.type == "release":
-                steps = [LLMPlanStep(skill="locate", target="target"), LLMPlanStep(skill="release", target="target", reference="reference" if operation.reference else None, region="semantic_region")]
-            elif operation.type == "search":
-                steps = [LLMPlanStep(skill="search", target="target")]
-            else:
-                steps = [LLMPlanStep(skill="locate", target="target")]
+            proxy = type("Operation", (), {
+                "target": "target" if operation.has_target else None,
+                "source": "source" if operation.has_source else None,
+                "destination": "destination" if operation.has_destination else None,
+                "reference": "reference" if operation.has_reference else None,
+            })()
+            steps = [LLMPlanStep(skill=skill, target=target, reference=reference, region=region) for skill, target, reference, region in RECIPE_DEFINITIONS[operation.type].build(proxy)]
             plans.append(LLMOperationPlan(id=operation.id, steps=steps))
         return SkillPlanLLMOutput(operations=plans)

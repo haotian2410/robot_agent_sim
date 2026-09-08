@@ -20,7 +20,6 @@ class ParseEntity(StrictModel):
 
 
 class ParseOperation(StrictModel):
-    id: str = Field(pattern=r"^op-[\w-]+$")
     type: Literal["locate", "search", "move", "grasp", "release", "pick_and_place", "press"]
     source: str | None = None
     destination: str | None = None
@@ -63,10 +62,10 @@ class TaskUnderstandingProvider(Protocol):
 def enrich_task(parsed: TaskParseLLMOutput, instruction: str) -> TaskIntent:
     operations = [
         Operation(
-            operation_id=op.id, task_type=op.type, source=op.source,
+            operation_id=f"op-{index + 1}", task_type=op.type, source=op.source,
             destination=op.destination, target=op.target, reference=op.reference,
             description=op.type.replace("_", " "),
-            depends_on=[parsed.operations[index - 1].id] if index else [],
+            depends_on=[f"op-{index}"] if index else [],
         )
         for index, op in enumerate(parsed.operations)
     ]

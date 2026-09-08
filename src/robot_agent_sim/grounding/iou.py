@@ -17,7 +17,7 @@ def match_detections(detections, truth, minimum_iou=0.20, ambiguity_margin=0.05)
     assignment = _maximize_assignment(matrix)
     matches, unmatched, ambiguous = [], [], []
     for row, detection in enumerate(detections):
-        detection_id = getattr(detection, "detection_id", getattr(detection, "entity_id", str(row)))
+        detection_id = getattr(detection, "detection_id", None) or getattr(detection, "entity_id", str(row))
         column = assignment[row]
         if column is None or matrix[row][column] < minimum_iou:
             unmatched.append(detection_id)

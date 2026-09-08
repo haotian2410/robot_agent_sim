@@ -10,7 +10,7 @@ class StrictModel(BaseModel):
 
 
 class VisionCandidate(StrictModel):
-    detection_id: str = Field(min_length=1, validation_alias=AliasChoices("detection_id", "id"))
+    detection_id: str | None = Field(default=None, min_length=1, validation_alias=AliasChoices("detection_id", "id"))
     entity_id: str = Field(min_length=1, validation_alias=AliasChoices("entity_id", "entity"))
     bbox: list[int] = Field(min_length=4, max_length=4)
 
@@ -23,7 +23,8 @@ class VisionCandidate(StrictModel):
         if isinstance(value, dict):
             value = dict(value)
             value.pop("confidence", None)
-            value.setdefault("detection_id", value.get("id") or value.get("entity_id") or value.get("entity"))
+            if value.get("id") or value.get("detection_id"):
+                value.setdefault("detection_id", value.get("id") or value.get("detection_id"))
             value.setdefault("entity_id", value.get("entity") or value.get("entity_id"))
             value.pop("id", None)
             value.pop("entity", None)
@@ -42,7 +43,7 @@ class VisionLLMOutput(StrictModel):
 
     @model_validator(mode="after")
     def unique_detections(self):
-        ids = [item.detection_id for item in self.detections]
+        ids = [item.detection_id for item in self.detections if item.detection_id is not None]
         if len(ids) != len(set(ids)):
             raise ValueError("detection_id must be unique")
         return self

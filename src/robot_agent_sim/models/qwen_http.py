@@ -28,7 +28,7 @@ class QwenHTTPProvider:
     def __init__(self, base_url: str, model: str, api_key: str = "", timeout: float = 120.0,
                  stage_max_completion_tokens: dict[str, int] | None = None,
                  stage_generation: dict[str, StageGenerationConfig] | None = None,
-                 use_structured_output: bool = True):
+                 use_structured_output: str | bool = "json_schema"):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
@@ -38,11 +38,15 @@ class QwenHTTPProvider:
             "task_understanding": 256, "vision_grounding": 384, "skill_planning": 512,
         }
         self.stage_generation = stage_generation or {}
-        self.use_structured_output = use_structured_output
+        self.use_structured_output = "json_object" if use_structured_output is True else ("off" if use_structured_output is False else use_structured_output)
+        if self.use_structured_output not in {"json_schema", "json_object", "off"}:
+            raise ValueError("structured output mode must be json_schema, json_object, or off")
 
     def _call(self, stage: str, prompt: str, user_content: str | list[dict[str, Any]]) -> str:
         response = None
         try:
+            if self.use_structured_output in {"json_object", "off"}:
+                prompt = prompt + "\n只输出一个 JSON 对象，不要 markdown 或额外文字。"
             config = self.stage_generation.get(stage)
             payload = {"model": self.model, "temperature": config.temperature if config else 0, "messages": [
                 {"role": "system", "content": prompt}, {"role": "user", "content": user_content}
@@ -52,7 +56,21 @@ class QwenHTTPProvider:
                 payload["max_completion_tokens"] = max_tokens
             # OpenAI-compatible Qwen servers that implement guided JSON accept
             # this parameter.  It is deliberately optional for older servers.
-            if self.use_structured_output:
+            if self.use_structured_output == "json_schema":
+                schema_models = {
+                    "task_understanding": TaskParseLLMOutput,
+                    "skill_planning": SkillPlanLLMOutput,
+                }
+                if stage == "vision_grounding":
+                    schema = {"type": "object", "additionalProperties": False, "properties": {"detections": {"type": "array", "items": {"type": "object", "additionalProperties": False, "properties": {"entity": {"type": "string"}, "bbox": {"type": "array", "items": {"type": "integer"}, "minItems": 4, "maxItems": 4}}, "required": ["entity", "bbox"]}}}, "required": ["detections"]}
+                else:
+                    model_type = schema_models[stage]
+                    schema = model_type.model_json_schema()
+                payload["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {"name": stage, "strict": True, "schema": schema},
+                }
+            elif self.use_structured_output == "json_object":
                 payload["response_format"] = {"type": "json_object"}
             response = httpx.post(
                 f"{self.base_url}/chat/completions",

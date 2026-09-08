@@ -100,6 +100,8 @@ robot-agent-sim plan --help
 | `--scene` | 不指定 | 已有 MuJoCo 场景 XML/MJCF 文件路径；指定后进入 Route B。 |
 | `--output-dir` | `var` | 输出目录。相对当前工作目录；已有同名 artifact 会被覆盖。 |
 | `--provider` | `fake` | `fake` 离线测试，或 `qwen` 使用 OpenAI-compatible 服务。 |
+| `--planner` | `recipe` | `recipe` 确定性规划、`qwen` 实验规划、`auto` 自动选择。 |
+| `--structured-output` | `json_schema` | Qwen 输出约束：`json_schema`、`json_object` 或 `off`。 |
 | `--qwen-base-url` | 不指定 | Qwen API 根地址；也可用 `QWEN_BASE_URL`。 |
 | `--qwen-model` | 不指定 | 服务端模型名；也可用 `QWEN_MODEL`。 |
 
@@ -232,11 +234,12 @@ visual_grounding.json   # 检测框、真值框、IoU、unmatched/ambiguous
 
 如果 XML 同目录存在 `<scene-stem>.scene_registry.json`，它优先定义 `object_id/body_name/semantic_name`。没有 sidecar 时，程序自动发现 XML 中的顶层任务物体 body，并排除机器人、桌面、相机、灯光等基础设施。`scene_000.xml` 没有任务物体，直接作为 Route B 输入时应配 sidecar 或改用 `scene_001`–`scene_003`。
 
-Pipeline 固定统计调用次数：
+默认 Pipeline 固定统计调用次数：
 
 ```text
-Route A：Task Understanding + Skill Planning = 2 次
-Route B：Task Understanding + Vision Grounding + Skill Planning = 3 次
+Route A + recipe：Task Understanding = 1 次
+Route B + recipe：Task Understanding + Vision Grounding = 2 次
+Route A + qwen：2 次；Route B + qwen：3 次
 ```
 
 系统没有 Agent Loop，也不会根据模型输出自动增加调用轮数。真实 Qwen Provider 是 OpenAI-compatible HTTP：
@@ -251,11 +254,13 @@ provider = QwenHTTPProvider(
     api_key="",
 )
 engine = PipelineEngine(understanding=provider, vision=provider, planner=provider)
-result = engine.plan("把左边的红色方块放进右边蓝色盒子", robot="panda", seed=7)
+result = engine.plan("把左边的红色方块放进右边蓝色盒子", robot="panda", seed=7, planner="recipe")
 ```
 
 Provider 不重试请求；每次固定阶段调用都会记录在 `provider.calls`，Pipeline 结果中的 `model_call_count` 是实际已发起的阶段调用数。
 每个阶段使用独立的 completion 上限，结果中的 `model_usage` 和 `model_usage.json` 记录 input/output/total token；预算超限会直接返回 `model_call_budget_exceeded`，不会隐式重试。
+
+`recipe` 模式覆盖 locate/search/move/grasp/release/press/pick_and_place 等标准任务，完全不调用 Skill Planner。`qwen` 模式保留用于复杂任务实验；`auto` 在 RecipePlanner 不支持时才回退到 Qwen，并仍受 Route A ≤2、Route B ≤3 的硬预算限制。
 
 ## 测试
 

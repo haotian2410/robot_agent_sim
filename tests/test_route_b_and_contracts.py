@@ -19,13 +19,13 @@ def test_route_b_auto_discovers_task_body_and_grounding_artifact(tmp_path):
     assert [item.body_name for item in registry.objects] == ["push_button_base"]
 
     provider = FakeVisionGroundingProvider(
-        [VisionDetection(entity_id="button_01", bbox=[710, 412, 867, 525], confidence=1.0)]
+        [VisionDetection(entity_id="button_01", bbox=[710, 412, 867, 525])]
     )
     result = PipelineEngine(vision=provider).plan(
         "按按钮", robot="ur5e", scene=SCENE_003, output_dir=tmp_path
     )
     assert result.status == "accepted"
-    assert result.model_call_count == 3
+    assert result.model_call_count == 2
     assert Path(result.artifacts["visual_grounding.json"]).is_file()
     assert result.grounded_task["entities"][0]["object_id"] == "scene_object_001"
     assert [step["skill_name"] for step in result.skill_plan["steps"]] == [
@@ -75,7 +75,7 @@ def test_qwen_provider_sends_fixed_stage_and_extracts_json(monkeypatch, tmp_path
 
         def json(self):
             return {
-                "choices": [{"message": {"content": '{"status":"unsupported_task","instruction":"x"}'}}],
+                "choices": [{"message": {"content": '{"status":"unsupported_task","raw_task":"x"}'}}],
                 "usage": {"prompt_tokens": 3, "completion_tokens": 4},
             }
 
@@ -88,9 +88,6 @@ def test_qwen_provider_sends_fixed_stage_and_extracts_json(monkeypatch, tmp_path
     intent = provider.understand(
         type("Request", (), {
             "instruction": "x",
-            "supported_task_types": ["locate"],
-            "supported_directions": ["left"],
-            "asset_catalog": [],
         })()
     )
     assert intent.status == "unsupported_task"
@@ -98,24 +95,12 @@ def test_qwen_provider_sends_fixed_stage_and_extracts_json(monkeypatch, tmp_path
     assert calls[0][0].endswith("/chat/completions")
     body = calls[0][1]["json"]
     assert body["temperature"] == 0
-    assert "supported_directions" in body["messages"][1]["content"]
+    assert body["messages"][1]["content"] == '{"instruction":"x"}'
     assert provider.calls[0]["stage"] == "task_understanding"
 
 
 def test_skill_plan_rejects_unknown_target_and_wrong_order():
-    from robot_agent_sim.contracts.skill_plan import SemanticSubtask, SkillPlan, SkillStep
-
+    from robot_agent_sim.contracts.skill_plan import SkillPlan, SkillStep
+    from robot_agent_sim.planning.recipes import validate_plan
     with pytest.raises(ValueError):
-        PipelineEngine._validate_skill_targets(
-            SkillPlan(
-                task_types=["press"],
-                steps=[SkillStep(
-                    step_id="step-1",
-                    semantic_subtask=SemanticSubtask(action="press", description="bad"),
-                    skill_name="press",
-                    target_object="missing",
-                )],
-                model_call_count=1,
-            ),
-            type("Task", (), {"entities": [], "task_types": ["press"]})(),
-        )
+        validate_plan(SkillPlan(task_types=["press"], steps=[SkillStep(step_id="step-1", operation_id="op-1", skill_name="press", target_object="missing")]), type("Task", (), {"entities": [], "operations": [type("Op", (), {"operation_id":"op-1", "task_type":"press", "depends_on":[]})()]})())

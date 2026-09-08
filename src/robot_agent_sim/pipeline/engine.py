@@ -18,6 +18,7 @@ from ..models.skill_planning import SkillPlanningRequest, enrich_skill_plan, pla
 from ..models.task_understanding import TaskUnderstandingRequest, enrich_task
 from ..models.vision_grounding import VisionGroundingRequest, VisionQuery
 from ..planning.recipes import recipe_prompt, validate_plan
+from ..planning.recipe_planner import RecipePlanner
 from ..scene.composer import SceneComposer
 from ..skills.registry import REGISTRY
 
@@ -30,6 +31,8 @@ class PipelineResult(BaseModel):
     skill_plan: dict | None = None
     model_call_count: int = 0
     model_usage: dict = Field(default_factory=dict)
+    planner: str = "recipe"
+    route: str = "A"
     status: str = "accepted"
     artifacts: dict[str, str] = Field(default_factory=dict)
     error: str | None = None
@@ -43,17 +46,21 @@ class PipelineEngine:
         self.assets = asset_registry or AssetRegistry()
         self.backend = MujocoSceneBackend()
 
-    def plan(self, instruction: str, robot: str = "panda", scene: Path | None = None, seed: int = 0, output_dir: Path | str | None = None) -> PipelineResult:
+    def plan(self, instruction: str, robot: str = "panda", scene: Path | None = None, seed: int = 0, output_dir: Path | str | None = None, planner: str = "recipe") -> PipelineResult:
         out = Path(output_dir or "var"); out.mkdir(parents=True, exist_ok=True)
         intent = None; registry = None; observation = None; visual_grounding = None
-        budget = ModelCallBudget.for_route(scene is not None)
+        if planner not in {"recipe", "qwen", "auto"}:
+            raise ValueError(f"unsupported planner: {planner}")
+        budget = ModelCallBudget.for_route(scene is not None, planner)
+        route = "B" if scene is not None else "A"
+        planner_used = planner
         try:
             budget.consume("task_understanding")
             parsed = self.understanding.understand(TaskUnderstandingRequest(instruction=instruction))
             self._capture(budget, "task_understanding", self.understanding)
             intent = enrich_task(parsed, instruction)
             if intent.status != TaskStatus.ACCEPTED:
-                return self._write_result(PipelineResult(task_intent=intent.model_dump(mode="json"), status=intent.status.value, model_call_count=budget.calls, model_usage=budget.summary()), out)
+                return self._write_result(PipelineResult(task_intent=intent.model_dump(mode="json"), status=intent.status.value, model_call_count=budget.calls, model_usage=budget.summary(), planner=planner_used, route=route), out)
 
             if scene is None:
                 assets = AssetResolver(self.assets).resolve_entities(intent.entities)
@@ -71,13 +78,20 @@ class PipelineEngine:
             else:
                 registry = self.backend.load_uploaded(Path(scene), robot)
                 observation = self.backend.renderer.render(Path(scene), registry, out)
-                queries = [VisionQuery(id=entity.entity_id, name=entity.semantic_name, category=entity.category, color=entity.color, all=any(relation.scope == "selection" and relation.subject == entity.entity_id for relation in intent.spatial_relations)) for entity in intent.entities]
+                selection_entities = {
+                    value for relation in intent.spatial_relations if relation.scope == "selection"
+                    for value in (relation.subject, relation.reference) if value
+                }
+                queries = [VisionQuery(id=entity.entity_id, name=entity.semantic_name, category=entity.category, color=entity.color, all=entity.entity_id in selection_entities) for entity in intent.entities]
                 budget.consume("vision_grounding")
                 detection = self.vision.detect(VisionGroundingRequest(entities=queries, rgb_path=str(observation.rgb_path)))
                 self._capture(budget, "vision_grounding", self.vision)
                 truth = [{"object_id": item.object_id, "bbox": item.bbox} for item in observation.instances if item.bbox is not None]
                 expected = {entity.entity_id for entity in intent.entities}
                 relevant = [item for item in detection.detections if item.entity_id in expected]
+                for index, item in enumerate(relevant, 1):
+                    if item.detection_id is None:
+                        item.detection_id = f"d-{index}"
                 matches, unmatched, ambiguous = match_detections(relevant, truth)
                 visual_grounding = {"detections": [item.model_dump(mode="json") for item in detection.detections], "truth": truth, "matches": [{"detection_id": detection_id, "object_id": object_id, "iou": score} for detection_id, object_id, score in matches], "unmatched": unmatched, "ambiguous": ambiguous, "minimum_iou": 0.2, "ambiguity_margin": 0.05}
                 if unmatched or ambiguous:
@@ -97,23 +111,31 @@ class PipelineEngine:
                 asset_bindings = {}
 
             task = GroundedTask(instruction=intent.instruction, task_types=intent.task_types, entities=grounded, operations=intent.operations, spatial_relations=intent.spatial_relations, scene_id=registry.scene_id)
-            budget.consume("skill_planning")
-            raw_plan = self.planner.plan(SkillPlanningRequest(
-                context=planner_context(task),
-                skill_catalog=f"{REGISTRY.prompt_catalog()}\nrecipes:{recipe_prompt()}",
-            ))
-            self._capture(budget, "skill_planning", self.planner)
-            skill = enrich_skill_plan(raw_plan, task)
-            validate_plan(skill, task)
-            result = PipelineResult(task_intent=intent.model_dump(mode="json"), scene_registry=registry.model_dump(mode="json"), grounded_task=task.model_dump(mode="json"), visual_grounding=visual_grounding, skill_plan=skill.model_dump(mode="json"), model_call_count=budget.calls, model_usage=budget.summary())
+            recipe_supported = RecipePlanner.supports(task)
+            if planner == "recipe" or (planner == "auto" and recipe_supported):
+                if not recipe_supported:
+                    raise ValueError("unsupported_recipe")
+                skill = RecipePlanner().plan(task)
+                planner_used = "recipe"
+            else:
+                budget.consume("skill_planning")
+                raw_plan = self.planner.plan(SkillPlanningRequest(
+                    context=planner_context(task),
+                    skill_catalog=REGISTRY.prompt_catalog(),
+                ))
+                self._capture(budget, "skill_planning", self.planner)
+                skill = enrich_skill_plan(raw_plan, task)
+                validate_plan(skill, task)
+                planner_used = "qwen"
+            result = PipelineResult(task_intent=intent.model_dump(mode="json"), scene_registry=registry.model_dump(mode="json"), grounded_task=task.model_dump(mode="json"), visual_grounding=visual_grounding, skill_plan=skill.model_dump(mode="json"), model_call_count=budget.calls, model_usage=budget.summary(), planner=planner_used, route=route)
             result.artifacts["asset_bindings.json"] = str(out / "asset_bindings.json")
             Path(result.artifacts["asset_bindings.json"]).write_text(json.dumps(asset_bindings, ensure_ascii=False, indent=2), encoding="utf-8")
             self._add_observation_artifacts(result.artifacts, observation)
             if scene is None: result.artifacts["scene.xml"] = str(xml_path)
             return self._write_result(result, out)
         except (OSError, ValueError, KeyError, RuntimeError, ValidationError, ModelCallBudgetExceeded) as exc:
-            status = "model_call_budget_exceeded" if isinstance(exc, ModelCallBudgetExceeded) else ("asset_missing" if "asset_missing" in str(exc) else "planning_failed")
-            result = PipelineResult(task_intent=intent.model_dump(mode="json") if intent else {"instruction": instruction}, scene_registry=registry.model_dump(mode="json") if registry else {}, status=status, model_call_count=budget.calls, model_usage=budget.summary(), error=str(exc))
+            status = "model_call_budget_exceeded" if isinstance(exc, ModelCallBudgetExceeded) else ("asset_missing" if "asset_missing" in str(exc) else ("unsupported_recipe" if "unsupported_recipe" in str(exc) else ("grounding_ambiguous" if "grounding_ambiguous" in str(exc) else ("relation_not_satisfied" if "relation_not_satisfied" in str(exc) else "planning_failed"))))
+            result = PipelineResult(task_intent=intent.model_dump(mode="json") if intent else {"instruction": instruction}, scene_registry=registry.model_dump(mode="json") if registry else {}, status=status, model_call_count=budget.calls, model_usage=budget.summary(), planner=planner_used, route=route, error=str(exc))
             if observation is not None: self._add_observation_artifacts(result.artifacts, observation)
             return self._write_result(result, out)
 
@@ -124,7 +146,9 @@ class PipelineEngine:
 
     @staticmethod
     def _write_result(result, out):
-        payloads = {"task_intent.json": result.task_intent, "scene_registry.json": result.scene_registry, "grounded_task.json": result.grounded_task, "visual_grounding.json": result.visual_grounding, "skill_plan.json": result.skill_plan, "model_usage.json": result.model_usage, "summary.json": {"status": result.status, "model_call_count": result.model_call_count, "model_usage": result.model_usage, "error": result.error}}
+        result.model_usage.setdefault("route", result.route)
+        result.model_usage.setdefault("planner", result.planner)
+        payloads = {"task_intent.json": result.task_intent, "scene_registry.json": result.scene_registry, "grounded_task.json": result.grounded_task, "visual_grounding.json": result.visual_grounding, "skill_plan.json": result.skill_plan, "model_usage.json": result.model_usage, "summary.json": {"status": result.status, "route": result.route, "planner": result.planner, "model_call_count": result.model_call_count, "model_usage": result.model_usage, "error": result.error}}
         for name, payload in payloads.items():
             path = out / name
             if payload is None:

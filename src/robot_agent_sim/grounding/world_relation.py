@@ -9,6 +9,14 @@ class WorldRelationError(ValueError):
     pass
 
 
+class RelationNotSatisfied(WorldRelationError):
+    pass
+
+
+class RelationAmbiguous(WorldRelationError):
+    pass
+
+
 class WorldRelationResolver:
     """Select task instances using MuJoCo world coordinates, never image axes."""
 
@@ -24,7 +32,7 @@ class WorldRelationResolver:
             if not values: raise WorldRelationError(f"missing visual candidates for {entity_id}")
             relation = next((item for item in intent.spatial_relations if item.scope == "selection" and item.subject == entity_id), None)
             if relation is None:
-                if len(values) != 1: raise WorldRelationError(f"multiple candidates without selection relation: {entity_id}")
+                if len(values) != 1: raise RelationAmbiguous(f"grounding_ambiguous: multiple candidates without selection relation: {entity_id}")
                 result = values[0]
             else:
                 relation_type = relation.relation
@@ -43,7 +51,17 @@ class WorldRelationResolver:
                     }.get(relation_type)
                     if axis_sign is None: raise WorldRelationError(f"unsupported selection relation: {relation_type}")
                     axis, sign = axis_sign
-                    result = min(values, key=lambda value: sign * positions[value["object_id"]][axis])
+                    if relation.reference:
+                        reference = choose(relation.reference)
+                        reference_value = positions[reference["object_id"]][axis]
+                        satisfying = [value for value in values if (positions[value["object_id"]][axis] - reference_value) * sign < 0]
+                        if not satisfying:
+                            raise RelationNotSatisfied(f"relation_not_satisfied: {entity_id} {relation_type} {relation.reference}")
+                        if len(satisfying) > 1:
+                            raise RelationAmbiguous(f"grounding_ambiguous: {entity_id} {relation_type} {relation.reference}")
+                        result = satisfying[0]
+                    else:
+                        result = min(values, key=lambda value: sign * positions[value["object_id"]][axis])
             resolving.remove(entity_id); selected[entity_id] = result; return result
 
         for entity in intent.entities: choose(entity.entity_id)

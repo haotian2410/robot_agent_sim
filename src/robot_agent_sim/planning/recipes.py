@@ -1,17 +1,48 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Callable
+
 from ..skills.registry import REGISTRY
 
 
-RECIPES: dict[str, tuple[str, ...]] = {
-    "grasp": ("locate", "move", "grasp"),
-    "press": ("locate", "move", "press"),
-    "pick_and_place": ("locate", "move", "grasp", "locate", "move", "release"),
-    "locate": ("locate",),
-    "search": ("search",),
-    "move": ("locate", "move"),
-    "release": ("locate", "release"),
+@dataclass(frozen=True)
+class RecipeDefinition:
+    task_type: str
+    build: Callable
+
+
+def _grasp(operation):
+    return [("locate", "target", None, None), ("move", "target", None, "grasp_region"), ("grasp", "target", None, None)]
+
+
+def _press(operation):
+    return [("locate", "target", None, None), ("move", "target", None, "button_surface"), ("press", "target", None, None)]
+
+
+def _pick_and_place(operation):
+    return [("locate", "source", None, None), ("move", "source", None, "grasp_region"), ("grasp", "source", None, None), ("locate", "destination", None, None), ("move", "destination", "source", "container_interior"), ("release", "source", "destination", "container_interior")]
+
+
+def _locate(operation): return [("locate", "target", None, None)]
+def _search(operation): return [("search", "target", None, None)]
+def _move(operation):
+    target = "target" if operation.target else "source"
+    return [("locate", target, None, None), ("move", target, "reference" if operation.reference else None, "relative_region" if operation.reference else "semantic_region")]
+def _release(operation):
+    target = "target" if operation.target else "source"
+    return [("locate", target, None, None), ("release", target, "reference" if operation.reference else None, "semantic_region")]
+
+
+RECIPE_DEFINITIONS = {
+    "grasp": RecipeDefinition("grasp", _grasp), "press": RecipeDefinition("press", _press),
+    "pick_and_place": RecipeDefinition("pick_and_place", _pick_and_place), "locate": RecipeDefinition("locate", _locate),
+    "search": RecipeDefinition("search", _search), "move": RecipeDefinition("move", _move),
+    "release": RecipeDefinition("release", _release),
 }
+
+_EMPTY_OPERATION = type("Operation", (), {"reference": None, "target": "target", "source": None, "destination": None})()
+RECIPES = {name: tuple(item[0] for item in definition.build(_EMPTY_OPERATION)) for name, definition in RECIPE_DEFINITIONS.items()}
 
 
 def recipe_prompt() -> str:
@@ -43,7 +74,7 @@ def validate_plan(plan, task) -> None:
         by_operation[step.operation_id].append(step.skill_name)
     for operation in task.operations:
         actual = tuple(by_operation[operation.operation_id])
-        expected = RECIPES[operation.task_type.value]
+        expected = tuple(item[0] for item in RECIPE_DEFINITIONS[operation.task_type.value].build(operation))
         if actual != expected:
             raise ValueError(f"invalid skill recipe for {operation.operation_id}: expected {expected}, got {actual}")
         for dependency in operation.depends_on:
