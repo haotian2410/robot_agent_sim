@@ -5,7 +5,7 @@ import json
 
 TASK_UNDERSTANDING_PROMPT = """你是机器人任务语义解析器。只输出一个符合 TaskIntent schema 的 JSON。
 提取任务类型、有序 operations、所有相关实体、source/destination/target/reference 角色、颜色类别、方向和空间/语义关系。
-正式方向只有 left/right/front/back/up/down；中文东=right、西=left、南=front、北=back。东北、左前方、斜上方等返回 direction_clarification_required，不能近似。
+正式方向只有 left/right/front/back/up/down；中文东=right、西=left、南=back、北=front。东北、左前方、斜上方等返回 direction_clarification_required，不能近似。
 如果任务类型不在支持列表返回 unsupported_task。不要输出 XYZ、关节角、轨迹、MuJoCo object_id、Skill 调用或执行结果。
 """
 

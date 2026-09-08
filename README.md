@@ -77,7 +77,7 @@ robot-agent-sim plan "抓取红方块" --seed 42
 ```text
 left/right/front/back/up/down
 左/右/前/后/上/下
-东=右，西=左，南=前，北=后
+东=右，西=左，南=后，北=前
 ```
 
 “东北、左前方、斜上方”等组合方向会返回 `direction_clarification_required`，不会自动近似。

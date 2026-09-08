@@ -53,8 +53,8 @@ class FakeTaskUnderstandingProvider:
         # Unary direction phrases (for example, “抓取前面的红方块”) still
         # constrain generated placement, but do not invent a second entity.
         direction_tokens = (
-            (("前", "南", "front", "south"), SpatialRelationType.FRONT_OF, "front"),
-            (("后", "北", "back", "north"), SpatialRelationType.BEHIND, "back"),
+            (("前", "北", "front", "north"), SpatialRelationType.FRONT_OF, "front"),
+            (("后", "南", "back", "south"), SpatialRelationType.BEHIND, "back"),
             (("上", "above", "up"), SpatialRelationType.ABOVE, "up"),
             (("下", "below", "down"), SpatialRelationType.BELOW, "down"),
         )

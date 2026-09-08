@@ -134,7 +134,7 @@ class SceneComposer:
                    Direction.FRONT: (0.0, 0.38, 0.0), Direction.BACK: (0.0, -0.38, 0.0),
                    Direction.UP: (0.0, 0.0, 0.20), Direction.DOWN: (0.0, 0.0, 0.02)}
         candidates = []
-        if preferred is not None: candidates.append((preferred[0], preferred[1], 0.0))
+        if preferred is not None: candidates.append((preferred[0], preferred[1], preferred[2] if len(preferred) == 3 else 0.0))
         if unary in presets: candidates.append(presets[unary])
         candidates.extend((rng.uniform(*WORKSPACE_X), rng.uniform(*WORKSPACE_Y), 0.0) for _ in range(200))
         for x, y, z in candidates:
