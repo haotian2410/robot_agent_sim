@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "robot-agent-sim"
+version = "0.1.0"
+description = "Planning-only robot task understanding and skill planning"
+requires-python = ">=3.11,<3.13"
+dependencies = ["pydantic>=2.10,<3", "typer>=0.15,<1", "httpx>=0.28,<1", "mujoco>=3.3,<4", "numpy>=2.0,<3", "pillow>=10,<13", "imageio>=2.36,<3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<9"]
+
+[project.scripts]
+robot-agent-sim = "robot_agent_sim.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/robot_agent_sim"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

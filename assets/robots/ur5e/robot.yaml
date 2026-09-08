@@ -1,0 +1,23 @@
+schema_version: "1.0"
+robot_id: ur5e
+display_name: Universal Robots UR5e + Robotiq 2F-85
+runtime_adapter: null
+render_available: true
+planning_available: true
+execution_available: false
+license_status: audited
+source_note: 网格来自 Google DeepMind MuJoCo Menagerie 固定版本，来源和许可证见 MODEL_SOURCE.md 与 THIRD_PARTY_LICENSES.md。
+root_body: base
+hand_body: robotiq_2f85_base
+tcp_site: robotiq_2f85_pinch
+home_keyframe: home
+joint_names:
+  - shoulder_pan_joint
+  - shoulder_lift_joint
+  - elbow_joint
+  - wrist_1_joint
+  - wrist_2_joint
+  - wrist_3_joint
+gripper_actuator: robotiq_2f85_fingers_actuator
+scene_xml_directory: scenes
+asset_directory: assets

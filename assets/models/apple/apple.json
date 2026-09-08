@@ -1,0 +1,12 @@
+{
+  "object_meta": {
+    "object_name": "apple",
+    "mjcf_model_file": "model.xml"
+  },
+  "grasp": {
+    "tcp_relative_pos": [0.0, 0.032, 0.0],
+    "tcp_relative_rotvec": [1.5708, 0.0, 0.0],
+    "tolerate_axis": [0.0, 0.0, 1.0],
+    "tolerate_angle_max": 1.2217
+  }
+}

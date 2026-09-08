@@ -1,0 +1,5 @@
+{
+  "source": "robot_agent_sim/assets/models",
+  "mesh_directories": ["apple", "banana", "baseball", "rubiks_cube", "sponge", "spoon", "sugar_box"],
+  "notes": "Generated at runtime from textured.obj, texture_map.png and textured_coacd_*.stl; original metadata JSON is advisory."
+}
