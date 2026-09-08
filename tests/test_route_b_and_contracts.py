@@ -7,11 +7,22 @@ import pytest
 from robot_agent_sim.backends.mujoco.backend import MujocoSceneBackend
 from robot_agent_sim.models.fake import FakeVisionGroundingProvider
 from robot_agent_sim.models.qwen_http import QwenHTTPProvider
+from robot_agent_sim.models.task_understanding import TaskUnderstandingRequest
 from robot_agent_sim.models.vision_grounding import VisionDetection
 from robot_agent_sim.pipeline.engine import PipelineEngine
+from robot_agent_sim.contracts.grounded_task import GroundedEntity, GroundedTask
+from robot_agent_sim.contracts.task_intent import Operation, TaskType
 
 
 SCENE_003 = Path(__file__).parents[1] / "assets/robots/ur5e/scenes/scene_003.xml"
+
+
+def test_mujoco_headless_rgb_segmentation_smoke(tmp_path):
+    registry = MujocoSceneBackend().load_uploaded(SCENE_003, "ur5e")
+    observation = MujocoSceneBackend().renderer.render(SCENE_003, registry, tmp_path)
+    assert observation.rgb_path.is_file()
+    assert observation.segmentation_path.is_file()
+    assert observation.segmentation_visualization_path.is_file()
 
 
 def test_route_b_auto_discovers_task_body_and_grounding_artifact(tmp_path):
@@ -85,11 +96,7 @@ def test_qwen_provider_sends_fixed_stage_and_extracts_json(monkeypatch, tmp_path
 
     monkeypatch.setattr(httpx, "post", fake_post)
     provider = QwenHTTPProvider("http://localhost:8000/v1", "qwen-test")
-    intent = provider.understand(
-        type("Request", (), {
-            "instruction": "x",
-        })()
-    )
+    intent = provider.understand(TaskUnderstandingRequest(instruction="x"))
     assert intent.status == "unsupported_task"
     assert len(calls) == 1
     assert calls[0][0].endswith("/chat/completions")
@@ -97,10 +104,56 @@ def test_qwen_provider_sends_fixed_stage_and_extracts_json(monkeypatch, tmp_path
     assert body["temperature"] == 0
     assert body["messages"][1]["content"] == '{"instruction":"x"}'
     assert provider.calls[0]["stage"] == "task_understanding"
+    assert body["response_format"]["type"] == "json_schema"
+    assert "json_schema" in body["response_format"]
+
+
+@pytest.mark.parametrize(
+    ("mode", "has_response_format"),
+    [("json_schema", True), ("json_object", True), ("off", False)],
+)
+def test_qwen_structured_output_modes(monkeypatch, mode, has_response_format):
+    calls = []
+
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": '{"status":"unsupported_task","raw_task":"x"}'}}]}
+
+    def fake_post(url, **kwargs):
+        calls.append(kwargs["json"])
+        return Response()
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    provider = QwenHTTPProvider("http://localhost:8000/v1", "qwen-test", use_structured_output=mode)
+    provider.understand(TaskUnderstandingRequest(instruction="x"))
+    payload = calls[0]
+    assert ("response_format" in payload) is has_response_format
+    if mode == "json_schema":
+        assert payload["response_format"]["type"] == "json_schema"
+        assert "schema" in payload["response_format"]["json_schema"]
+        assert "只输出一个 JSON 对象" not in payload["messages"][0]["content"]
+    elif mode == "json_object":
+        assert payload["response_format"] == {"type": "json_object"}
+        assert payload["messages"][0]["content"].endswith("只输出一个 JSON 对象，不要 markdown 或额外文字。")
+    else:
+        assert "只输出一个 JSON 对象，不要 markdown 或额外文字。" in payload["messages"][0]["content"]
 
 
 def test_skill_plan_rejects_unknown_target_and_wrong_order():
     from robot_agent_sim.contracts.skill_plan import SkillPlan, SkillStep
     from robot_agent_sim.planning.recipes import validate_plan
+    task = GroundedTask(
+        instruction="按按钮",
+        task_types=[TaskType.PRESS],
+        entities=[GroundedEntity(entity_id="button", semantic_name="button", object_id="button-1", grounding_method="asset_scene_binding")],
+        operations=[Operation(operation_id="op-1", task_type=TaskType.PRESS, target="button")],
+        spatial_relations=[],
+        scene_id="scene",
+    )
     with pytest.raises(ValueError):
-        validate_plan(SkillPlan(task_types=["press"], steps=[SkillStep(step_id="step-1", operation_id="op-1", skill_name="press", target_object="missing")]), type("Task", (), {"entities": [], "operations": [type("Op", (), {"operation_id":"op-1", "task_type":"press", "depends_on":[]})()]})())
+        validate_plan(SkillPlan(task_types=[TaskType.PRESS], steps=[SkillStep(step_id="step-1", operation_id="op-1", skill_name="press", target_object="missing")]), task)

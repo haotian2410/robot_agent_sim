@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ..contracts.task_intent import SpatialRelationType
+from ..contracts.task_intent import Operation, SpatialRelationType, TaskType
 from .skill_planning import LLMOperationPlan, LLMPlanStep, SkillPlanLLMOutput
 from .task_understanding import ParseEntity, ParseOperation, ParseRelation, TaskParseLLMOutput
 from .vision_grounding import VisionCandidate, VisionLLMOutput
@@ -134,12 +134,14 @@ class FakeSkillPlanningProvider:
     def plan(self, request):
         plans = []
         for operation in request.context.operations:
-            proxy = type("Operation", (), {
-                "target": "target" if operation.has_target else None,
-                "source": "source" if operation.has_source else None,
-                "destination": "destination" if operation.has_destination else None,
-                "reference": "reference" if operation.has_reference else None,
-            })()
+            proxy = Operation(
+                operation_id=operation.id,
+                task_type=TaskType(operation.type),
+                target="target" if operation.has_target else None,
+                source="source" if operation.has_source else None,
+                destination="destination" if operation.has_destination else None,
+                reference="reference" if operation.has_reference else None,
+            )
             steps = [LLMPlanStep(skill=skill, target=target, reference=reference, region=region) for skill, target, reference, region in RECIPE_DEFINITIONS[operation.type].build(proxy)]
             plans.append(LLMOperationPlan(id=operation.id, steps=steps))
         return SkillPlanLLMOutput(operations=plans)

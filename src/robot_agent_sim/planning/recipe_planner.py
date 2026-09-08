@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from ..contracts.skill_plan import SkillPlan, SkillStep
-from ..contracts.task_intent import TaskType
 from ..skills.registry import REGISTRY
 from .recipes import RECIPE_DEFINITIONS, validate_plan
 

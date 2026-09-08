@@ -1,3 +1,3 @@
-from .recipes import RECIPES, recipe_prompt, validate_plan
+from .recipes import RECIPE_DEFINITIONS, validate_plan
 
-__all__ = ["RECIPES", "recipe_prompt", "validate_plan"]
+__all__ = ["RECIPE_DEFINITIONS", "validate_plan"]

@@ -17,7 +17,7 @@ from ..models.fake import FakeSkillPlanningProvider, FakeTaskUnderstandingProvid
 from ..models.skill_planning import SkillPlanningRequest, enrich_skill_plan, planner_context
 from ..models.task_understanding import TaskUnderstandingRequest, enrich_task
 from ..models.vision_grounding import VisionGroundingRequest, VisionQuery
-from ..planning.recipes import recipe_prompt, validate_plan
+from ..planning.recipes import validate_plan
 from ..planning.recipe_planner import RecipePlanner
 from ..scene.composer import SceneComposer
 from ..skills.registry import REGISTRY
@@ -95,7 +95,7 @@ class PipelineEngine:
                 matches, unmatched, ambiguous = match_detections(relevant, truth)
                 visual_grounding = {"detections": [item.model_dump(mode="json") for item in detection.detections], "truth": truth, "matches": [{"detection_id": detection_id, "object_id": object_id, "iou": score} for detection_id, object_id, score in matches], "unmatched": unmatched, "ambiguous": ambiguous, "minimum_iou": 0.2, "ambiguity_margin": 0.05}
                 if unmatched or ambiguous:
-                    result = PipelineResult(task_intent=intent.model_dump(mode="json"), scene_registry=registry.model_dump(mode="json"), visual_grounding=visual_grounding, status="grounding_ambiguous" if ambiguous else "grounding_failed", model_call_count=budget.calls, model_usage=budget.summary(), error=f"unmatched={unmatched}; ambiguous={ambiguous}")
+                    result = PipelineResult(task_intent=intent.model_dump(mode="json"), scene_registry=registry.model_dump(mode="json"), visual_grounding=visual_grounding, status="grounding_ambiguous" if ambiguous else "grounding_failed", model_call_count=budget.calls, model_usage=budget.summary(), planner=planner_used, route=route, error=f"unmatched={unmatched}; ambiguous={ambiguous}")
                     self._add_observation_artifacts(result.artifacts, observation); return self._write_result(result, out)
                 instance_by_id = {item.object_id: item for item in observation.instances}
                 positions = {item.object_id: item.world_position for item in observation.instances}
@@ -118,6 +118,7 @@ class PipelineEngine:
                 skill = RecipePlanner().plan(task)
                 planner_used = "recipe"
             else:
+                planner_used = "qwen"
                 budget.consume("skill_planning")
                 raw_plan = self.planner.plan(SkillPlanningRequest(
                     context=planner_context(task),
@@ -126,7 +127,6 @@ class PipelineEngine:
                 self._capture(budget, "skill_planning", self.planner)
                 skill = enrich_skill_plan(raw_plan, task)
                 validate_plan(skill, task)
-                planner_used = "qwen"
             result = PipelineResult(task_intent=intent.model_dump(mode="json"), scene_registry=registry.model_dump(mode="json"), grounded_task=task.model_dump(mode="json"), visual_grounding=visual_grounding, skill_plan=skill.model_dump(mode="json"), model_call_count=budget.calls, model_usage=budget.summary(), planner=planner_used, route=route)
             result.artifacts["asset_bindings.json"] = str(out / "asset_bindings.json")
             Path(result.artifacts["asset_bindings.json"]).write_text(json.dumps(asset_bindings, ensure_ascii=False, indent=2), encoding="utf-8")

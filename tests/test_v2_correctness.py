@@ -1,6 +1,6 @@
 import random
 import pytest
-from types import SimpleNamespace
+from robot_agent_sim.contracts.task_intent import Operation, TaskEntity, TaskIntent, TaskStatus, TaskType
 from robot_agent_sim.scene.directions import normalize_direction
 from robot_agent_sim.scene.composer import SceneComposer
 
@@ -12,7 +12,13 @@ def test_direction_alias(word, expected):
 def test_vertical_pair_preserved(relation):
     composer = SceneComposer()
     a, b = composer._relation_pair_positions(relation, (.06,)*3, (.06,)*3)
-    intent = SimpleNamespace(spatial_relations=[])
+    intent = TaskIntent(
+        status=TaskStatus.ACCEPTED,
+        instruction="定位对象",
+        task_types=[TaskType.LOCATE],
+        entities=[TaskEntity(entity_id="a", semantic_name="object a", category="cube")],
+        operations=[Operation(operation_id="op-1", task_type=TaskType.LOCATE, target="a")],
+    )
     a = composer._position('a', (.06,)*3, [], random.Random(7), intent, a)
     b = composer._position('b', (.06,)*3, [], random.Random(7), intent, b)
     assert (a[2] > b[2]) if relation == 'above' else (a[2] < b[2])

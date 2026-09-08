@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 os.environ.setdefault("MUJOCO_GL", "egl")
+os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 import imageio.v2 as imageio
 import mujoco
 import numpy as np

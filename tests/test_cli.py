@@ -1,10 +1,10 @@
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from typer.testing import CliRunner
 
 from robot_agent_sim import cli
+from robot_agent_sim.pipeline.engine import PipelineResult
 
 runner = CliRunner()
 
@@ -15,7 +15,7 @@ def calls(monkeypatch):
 
     def plan(self, instruction, **kwargs):
         received.append((instruction, kwargs))
-        return SimpleNamespace(model_dump=lambda **_: {"status": "accepted"})
+        return PipelineResult(task_intent={"status": "accepted"})
 
     monkeypatch.setattr(cli.PipelineEngine, "plan", plan)
     return received

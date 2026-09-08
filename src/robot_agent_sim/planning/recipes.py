@@ -41,14 +41,6 @@ RECIPE_DEFINITIONS = {
     "release": RecipeDefinition("release", _release),
 }
 
-_EMPTY_OPERATION = type("Operation", (), {"reference": None, "target": "target", "source": None, "destination": None})()
-RECIPES = {name: tuple(item[0] for item in definition.build(_EMPTY_OPERATION)) for name, definition in RECIPE_DEFINITIONS.items()}
-
-
-def recipe_prompt() -> str:
-    return ";".join(f"{name}:{'>'.join(steps)}" for name, steps in RECIPES.items())
-
-
 def validate_plan(plan, task) -> None:
     object_ids = {entity.object_id for entity in task.entities}
     operation_ids = [operation.operation_id for operation in task.operations]

@@ -9,8 +9,12 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
+    env:
+      MUJOCO_GL: egl
+      PYOPENGL_PLATFORM: egl
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
