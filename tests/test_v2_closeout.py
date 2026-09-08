@@ -74,6 +74,7 @@ def test_fixed_planner_route_call_budgets(tmp_path, route_scene, planner, expect
     assert result.planner == planner
     assert result.model_usage["calls"] == expected_calls
     assert len(result.model_usage["stages"]) == expected_calls
+    assert Path(result.artifacts["model_usage.json"]).is_file()
 
 
 class UnsupportedRecipeProvider:
@@ -96,3 +97,4 @@ def test_auto_unsupported_recipe_falls_back_to_qwen_budget(tmp_path, route_scene
     assert result.route == ("B" if route_scene else "A")
     assert result.planner == "qwen"
     assert result.model_usage["calls"] == expected_calls
+    assert Path(result.artifacts["model_usage.json"]).is_file()
