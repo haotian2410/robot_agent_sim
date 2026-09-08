@@ -1,12 +1,12 @@
 # robot-agent-sim
 
-`robot-agent-sim` 是一个只做任务理解、场景语义对齐和技能规划的 Python 项目。它接收中文或英文自然语言，输出 `TaskIntent`、对象绑定结果和包含语义子任务的 `SkillPlan`。当前命令不会让 Panda 或 UR5e 执行动作，也不做 IK、轨迹规划、碰撞规划或真实机器人控制。
+`robot-agent-sim` 是一个只做任务理解、场景语义对齐和技能规划的 Python 项目。它接收中文或英文自然语言，输出 `TaskIntent`、对象绑定结果和 `SkillPlan`。当前命令不会让 Panda 或 UR5e 执行动作，也不做 IK、轨迹规划、碰撞规划或真实机器人控制。
 
 主链路固定为：
 
 ```text
 UserInstruction → TaskIntent → Scene Construction / Visual Grounding
-→ GroundedTask → SkillPlan → Semantic Subtasks + Atomic Skill Sequence
+→ GroundedTask → SkillPlan → Atomic Skill Sequence
 ```
 
 Python 显式控制阶段和调用次数；模型不能自主 tool calling、循环或增加调用次数。MuJoCo 只负责场景、RGB 和 instance identity，VLM 只返回二维框，IoU 才负责把二维框绑定到仿真实例。
@@ -29,7 +29,7 @@ src/robot_agent_sim/
 
 - `TaskIntent`：任务状态、任务类型、实体、顺序 operations 和空间关系；不含 XYZ、object_id 或 Skill。
 - `GroundedTask`：每个语义实体绑定到唯一 `object_id`，记录 `asset_scene_binding` 或 `vlm_iou` 方法。
-- `SkillPlan`：每个 `SkillStep` 同时含 `semantic_subtask`、注册的 `skill_name`、对象引用和依赖关系。
+- `SkillPlan`：每个 `SkillStep` 含 operation、注册的 `skill_name`、对象引用和由 Python 补出的依赖关系。
 
 三个模型 Prompt 位于 `src/robot_agent_sim/models/prompts.py`：Task Understanding 只抽取语义，Vision Grounding 只输出 0–1000 的二维 bbox，Skill Planning 只从固定 Atomic Skill Catalog 生成高层步骤。
 
@@ -185,6 +185,7 @@ var/pick-place/
 ├── visual_grounding.json # Route B；Route A 不生成
 ├── skill_plan.json
 ├── summary.json
+├── model_usage.json
 ├── scene.xml              # Route A 生成场景时存在
 ├── rgb.png
 ├── segmentation.npy
@@ -192,7 +193,7 @@ var/pick-place/
 └── instance_index.json    # compatibility alias of instances.json
 ```
 
-`skill_plan.json` 中每一步同时包含语义描述和 Skill 调用。例如 pick-and-place 的顺序是：
+`skill_plan.json` 中每一步包含注册 Skill 和对象引用；中文描述由 Registry 确定性生成。例如 pick-and-place 的顺序是：
 
 ```text
 locate → move → grasp → locate → move → release
@@ -254,6 +255,7 @@ result = engine.plan("把左边的红色方块放进右边蓝色盒子", robot="
 ```
 
 Provider 不重试请求；每次固定阶段调用都会记录在 `provider.calls`，Pipeline 结果中的 `model_call_count` 是实际已发起的阶段调用数。
+每个阶段使用独立的 completion 上限，结果中的 `model_usage` 和 `model_usage.json` 记录 input/output/total token；预算超限会直接返回 `model_call_budget_exceeded`，不会隐式重试。
 
 ## 测试
 

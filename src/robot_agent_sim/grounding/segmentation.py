@@ -8,6 +8,7 @@ class InstanceObservation(BaseModel):
     body_name: str
     bbox: tuple[int, int, int, int] | None = None
     visible_pixel_count: int = Field(ge=0)
+    world_position: tuple[float, float, float]
 
 class SceneObservation(BaseModel):
     model_config = ConfigDict(extra="forbid")

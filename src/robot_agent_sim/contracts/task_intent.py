@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -22,13 +23,6 @@ class TaskType(StrEnum):
     MIXED = "mixed"
 
 
-class EntityRole(StrEnum):
-    SOURCE = "source"
-    DESTINATION = "destination"
-    TARGET = "target"
-    REFERENCE = "reference"
-
-
 class Direction(StrEnum):
     LEFT = "left"
     RIGHT = "right"
@@ -39,6 +33,12 @@ class Direction(StrEnum):
 
 
 class SpatialRelationType(StrEnum):
+    LEFT = "left"
+    RIGHT = "right"
+    FRONT = "front"
+    BACK = "back"
+    UP = "up"
+    DOWN = "down"
     LEFT_OF = "left_of"
     RIGHT_OF = "right_of"
     FRONT_OF = "front_of"
@@ -57,8 +57,6 @@ class TaskEntity(BaseModel):
     category: str = Field(min_length=1, max_length=50)
     aliases: list[str] = Field(default_factory=list, max_length=20)
     color: str | None = None
-    role: EntityRole = EntityRole.TARGET
-    candidate_group: str | None = None
 
 
 class SpatialRelation(BaseModel):
@@ -66,8 +64,7 @@ class SpatialRelation(BaseModel):
     subject: str
     relation: SpatialRelationType
     reference: str | None = None
-    direction: Direction | None = None
-
+    scope: Literal["scene", "selection", "goal"] = "selection"
     @model_validator(mode="after")
     def check_relation(self):
         if self.relation in {SpatialRelationType.NEAREST, SpatialRelationType.FARTHEST} and self.reference is None:
@@ -83,7 +80,7 @@ class Operation(BaseModel):
     destination: str | None = None
     target: str | None = None
     reference: str | None = None
-    description: str = Field(min_length=1, max_length=300)
+    description: str = Field(default="", max_length=300)
     depends_on: list[str] = Field(default_factory=list)
 
 

@@ -1,22 +1,17 @@
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
 from .task_intent import TaskType
 
 
-class SemanticSubtask(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    action: str
-    description: str = Field(min_length=1, max_length=300)
-
-
 class SkillStep(BaseModel):
+    """Rich internal step. IDs, dependencies and object refs are Python-owned."""
+
     model_config = ConfigDict(extra="forbid")
     step_id: str = Field(pattern=r"^step-[0-9]+$")
-    semantic_subtask: SemanticSubtask
-    skill_name: Literal["locate", "search", "move", "grasp", "release", "press"]
+    operation_id: str = Field(pattern=r"^op-[\w-]+$")
+    skill_name: str = Field(min_length=1)
     target_object: str | None = None
     reference_object: str | None = None
     semantic_target: str | None = None
@@ -27,7 +22,6 @@ class SkillPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
     task_types: list[TaskType]
     steps: list[SkillStep]
-    model_call_count: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def valid_steps(self):

@@ -90,8 +90,45 @@ class MujocoSceneBackend:
         else: ET.SubElement(body, "geom", name=f"{item.object_id}_button", type="cylinder", size="0.025 0.012", pos="0 0 0.032", rgba="0.8 0.1 0.1 1")
     @staticmethod
     def _discover_objects(root):
-        world = root.find("worldbody"); excluded = {"link0", "base", "robot_pedestal", "work_table", "overhead_camera_mount"}
-        return [body.get("name") for body in (world.findall("body") if world is not None else []) if body.get("name") and body.get("name") not in excluded]
+        """Discover task objects without treating robot internals as objects.
+
+        The XMLs used by different robot backends do not share a fixed list of
+        top-level bodies, so filtering only ``worldbody.findall('body')`` is
+        both incomplete and prone to returning robot links.  We exclude whole
+        infrastructure subtrees and keep the remaining top-level task bodies;
+        nested task bodies are included only when their parent is itself a task
+        body (e.g. a button key).
+        """
+        world = root.find("worldbody")
+        if world is None:
+            return []
+        infrastructure = {"base", "link0", "robot", "robot_pedestal", "work_table",
+                          "table", "overhead_camera_mount", "wrist_camera_mount",
+                          "camera", "scene_camera", "floor", "ground", "fixture",
+                          "support", "lighting"}
+        robot_tokens = ("link", "joint", "gripper", "robotiq", "camera", "mount",
+                        "pedestal", "shoulder", "upper_arm", "forearm", "wrist")
+        names: list[str] = []
+
+        def walk(body, excluded=False, task_parent=False):
+            name = body.get("name", "")
+            low = name.casefold()
+            subtree_excluded = (
+                excluded or low in infrastructure
+                or any(token in low for token in robot_tokens)
+                or any(token in low for token in ("table", "floor", "ground", "light"))
+            )
+            # A direct body with a geom is a useful task object.  A nested body
+            # under an infrastructure subtree is never task data.
+            if not subtree_excluded and not task_parent and body.find("geom") is not None:
+                names.append(name)
+                task_parent = True
+            for child in body.findall("body"):
+                walk(child, subtree_excluded, task_parent)
+
+        for body in world.findall("body"):
+            walk(body)
+        return names
 
 def _rgba(name):
     low = name.casefold(); return "0.8 0.08 0.08 1" if "red" in low else "0.08 0.25 0.8 1" if "blue" in low else "0.9 0.72 0.08 1" if "yellow" in low else "0.65 0.65 0.65 1"

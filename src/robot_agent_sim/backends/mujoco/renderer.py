@@ -28,7 +28,8 @@ class MujocoRenderer:
             if len(xs):
                 bbox = (round(float(ys.min()) * 1000 / height), round(float(xs.min()) * 1000 / width), round(float(ys.max()+1) * 1000 / height), round(float(xs.max()+1) * 1000 / width))
                 visual[mask] = _color(index)
-            instances.append(InstanceObservation(object_id=item.object_id, body_name=item.body_name, bbox=bbox, visible_pixel_count=int(mask.sum())))
+            world_position = tuple(float(value) for value in data.xpos[body_id])
+            instances.append(InstanceObservation(object_id=item.object_id, body_name=item.body_name, bbox=bbox, visible_pixel_count=int(mask.sum()), world_position=world_position))
         imageio.imwrite(visual_path, visual)
         # Keep both names: ``instances.json`` is the public artifact name,
         # while ``instance_index.json`` remains a backwards-compatible alias

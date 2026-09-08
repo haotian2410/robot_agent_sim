@@ -123,13 +123,21 @@ class SceneComposer:
         position = self._position(entity.entity_id, dimensions, existing, rng, intent, preferred)
         base = _slug(entity.semantic_name or asset.model_name)
         object_id = f"{base}_{index:02d}"
-        return SceneObject(object_id=object_id, body_name=object_id, role=entity.role.value,
+        return SceneObject(object_id=object_id, body_name=object_id, role="task_object",
                            semantic_name=entity.semantic_name, position=position, dimensions_m=dimensions,
                            entity_id=entity.entity_id if index == 1 else None, candidate_for=entity.entity_id,
                            model_id=asset.model_id, model_name=asset.model_name)
 
     def _position(self, entity_id, dimensions, existing, rng, intent, preferred):
-        unary = next((r.direction for r in intent.spatial_relations if r.subject == entity_id and r.direction), None)
+        unary_relations = {
+            SpatialRelationType.LEFT: Direction.LEFT,
+            SpatialRelationType.RIGHT: Direction.RIGHT,
+            SpatialRelationType.FRONT: Direction.FRONT,
+            SpatialRelationType.BACK: Direction.BACK,
+            SpatialRelationType.UP: Direction.UP,
+            SpatialRelationType.DOWN: Direction.DOWN,
+        }
+        unary = next((unary_relations[r.relation] for r in intent.spatial_relations if r.subject == entity_id and r.relation in unary_relations), None)
         presets = {Direction.LEFT: (-0.22, 0.0, 0.0), Direction.RIGHT: (0.22, 0.0, 0.0),
                    Direction.FRONT: (0.0, 0.38, 0.0), Direction.BACK: (0.0, -0.38, 0.0),
                    Direction.UP: (0.0, 0.0, 0.20), Direction.DOWN: (0.0, 0.0, 0.02)}

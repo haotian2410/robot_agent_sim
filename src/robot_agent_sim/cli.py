@@ -10,6 +10,7 @@ import typer
 
 from .pipeline.engine import PipelineEngine
 from .models.qwen_http import QwenHTTPProvider
+from .skills.registry import REGISTRY
 
 app = typer.Typer(help="Planning-only 机器人技能规划。默认使用 Fake Providers，可选 Qwen HTTP。")
 
@@ -102,7 +103,7 @@ def _print_summary(result):
     for entity in intent.get("entities", []):
         typer.echo(
             f"  {entity['entity_id']}: {entity['semantic_name']} "
-            f"(role={entity['role']}, category={entity['category']})"
+            f"(category={entity['category']})"
         )
     if not intent.get("entities"):
         typer.echo("  -")
@@ -116,12 +117,17 @@ def _print_summary(result):
         typer.echo("  -")
     typer.echo("语义子任务顺序：")
     for step in plan.get("steps", []):
-        typer.echo(f"  {step['step_id']}: {step['semantic_subtask']['description']}")
+        typer.echo(f"  {step['step_id']}: {REGISTRY.describe(step['skill_name'], step.get('target_object'), step.get('reference_object'), step.get('semantic_target'))}")
     if not plan.get("steps"):
         typer.echo("  -")
     skills = " -> ".join(step["skill_name"] for step in plan.get("steps", [])) or "-"
     typer.echo(f"Atomic Skill 调用顺序：{skills}")
     typer.echo(f"模型调用次数：{getattr(result, 'model_call_count', 0)}")
+    usage = getattr(result, "model_usage", {}) or {}
+    typer.echo(
+        f"模型 Tokens：输入 {usage.get('prompt_tokens', 0)} / "
+        f"输出 {usage.get('completion_tokens', 0)} / 总计 {usage.get('total_tokens', 0)}"
+    )
 
 
 if __name__ == "__main__":

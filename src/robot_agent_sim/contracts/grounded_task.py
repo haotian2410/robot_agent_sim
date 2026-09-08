@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from .task_intent import EntityRole, Operation, SpatialRelation, TaskType
+from .task_intent import Operation, SpatialRelation, TaskType
 
 
 class GroundedEntity(BaseModel):
@@ -11,7 +11,6 @@ class GroundedEntity(BaseModel):
     semantic_name: str = Field(min_length=1, max_length=100)
     object_id: str
     body_name: str | None = None
-    role: EntityRole
     model_id: str | None = None
     model_name: str | None = None
     grounding_method: Literal["asset_scene_binding", "vlm_iou", "detector_iou"]
