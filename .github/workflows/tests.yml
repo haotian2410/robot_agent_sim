@@ -13,12 +13,14 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12"]
     env:
-      MUJOCO_GL: egl
-      PYOPENGL_PLATFORM: egl
+      MUJOCO_GL: osmesa
+      PYOPENGL_PLATFORM: osmesa
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install headless Mesa dependencies
+        run: sudo apt-get update && sudo apt-get install -y libosmesa6-dev libgl1-mesa-dri libglu1-mesa
       - run: python -m pip install -e '.[dev]'
       - run: pytest -q
