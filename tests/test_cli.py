@@ -13,11 +13,12 @@ runner = CliRunner()
 def calls(monkeypatch):
     received = []
 
-    def plan(self, instruction, **kwargs):
-        received.append((instruction, kwargs))
-        return PipelineResult(task_intent={"status": "accepted"})
+    class FakeEngine:
+        def plan(self, instruction, **kwargs):
+            received.append((instruction, kwargs))
+            return PipelineResult(task_intent={"status": "accepted"})
 
-    monkeypatch.setattr(cli.PipelineEngine, "plan", plan)
+    monkeypatch.setattr(cli, "_new_engine", lambda *args, **kwargs: FakeEngine())
     return received
 
 
@@ -30,6 +31,7 @@ def test_plan_subcommand_preserves_instruction_and_options(calls, tmp_path):
     assert result.exit_code == 0, result.output
     assert calls == [(instruction, {
         "robot": "panda", "scene": None, "seed": 7, "output_dir": tmp_path, "planner": "recipe",
+        "interaction_registry": None,
     })]
 
 
@@ -40,6 +42,7 @@ def test_uploaded_scene_options(calls, tmp_path):
     assert result.exit_code == 0, result.output
     assert calls[0][1] == {
         "robot": "ur5e", "scene": scene, "seed": 0, "output_dir": Path("var"), "planner": "recipe",
+        "interaction_registry": None,
     }
 
 
@@ -72,10 +75,11 @@ def test_help_does_not_start_pipeline(calls, args):
 
 
 def test_pipeline_error_is_readable(monkeypatch):
-    def fail(*args, **kwargs):
-        raise ValueError("scene XML contains forbidden include/plugin")
+    class FailingEngine:
+        def plan(self, *args, **kwargs):
+            raise ValueError("scene XML contains forbidden include/plugin")
 
-    monkeypatch.setattr(cli.PipelineEngine, "plan", fail)
+    monkeypatch.setattr(cli, "_new_engine", lambda *args, **kwargs: FailingEngine())
     result = runner.invoke(cli.app, ["plan", "任务"])
     assert result.exit_code == 1
     assert "规划失败" in result.output

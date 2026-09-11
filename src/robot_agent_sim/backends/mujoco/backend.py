@@ -68,6 +68,11 @@ class MujocoSceneBackend:
     @staticmethod
     def _add_instance(world, item, record):
         body = ET.SubElement(world, "body", name=item.body_name, pos=" ".join(str(v) for v in item.position)); dimensions = item.dimensions_m or record.dimensions_m or (0.06, 0.06, 0.06); z = dimensions[2] / 2
+        # Generated ordinary objects are movable payloads.  A free joint is
+        # required by the control gripper's persistent attachment model;
+        # containers and buttons remain static scene geometry.
+        if record.model_name not in {"open_box", "button_basic"}:
+            ET.SubElement(body, "freejoint", name=f"{item.object_id}_free")
         if record.source == "mesh":
             minimum = record.bbox_min_m or (0.0, 0.0, 0.0)
             maximum = record.bbox_max_m or dimensions

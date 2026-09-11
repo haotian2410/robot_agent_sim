@@ -14,6 +14,10 @@ class RecipePlanner:
                 return False
             if operation.task_type.value == "pick_and_place" and not (operation.source and operation.destination):
                 return False
+            if operation.task_type.value in {"open", "close"} and not (
+                operation.target and operation.reference
+            ):
+                return False
             if operation.task_type.value in {"locate", "search", "grasp", "press", "move", "release"} and not (operation.target or operation.source):
                 return False
         return True

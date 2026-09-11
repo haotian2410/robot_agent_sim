@@ -20,6 +20,8 @@ class TaskType(StrEnum):
     RELEASE = "release"
     PICK_AND_PLACE = "pick_and_place"
     PRESS = "press"
+    OPEN = "open"
+    CLOSE = "close"
     MIXED = "mixed"
 
 

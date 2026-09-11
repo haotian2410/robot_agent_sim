@@ -47,4 +47,6 @@ REGISTRY = AtomicSkillRegistry((
     SkillDefinition(name="grasp", label="抓取", description="抓取已定位目标", prompt_signature="grasp(target)"),
     SkillDefinition(name="release", label="释放", description="释放已抓取目标", prompt_signature="release(target,reference?,region?)", allowed_regions=("container_interior", "relative_region", "semantic_region")),
     SkillDefinition(name="press", label="按压", description="按压已定位按钮", prompt_signature="press(target)"),
+    SkillDefinition(name="pull", label="拉动", description="拉动已抓住的关节机构", prompt_signature="pull(target)"),
+    SkillDefinition(name="push", label="推动", description="推动已抓住的关节机构", prompt_signature="push(target)"),
 ))

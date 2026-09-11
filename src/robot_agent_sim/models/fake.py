@@ -28,12 +28,30 @@ class FakeTaskUnderstandingProvider:
             if not any(entity.id == eid for entity in entities):
                 entities.append(ParseEntity(id=eid, name=name, category=category, color=color))
 
-        if "红" in text or "red" in low: add("red_cube_01", "red cube", "cube", "red")
-        if "蓝" in text or "blue" in low: add("blue_box_01", "blue box", "container", "blue")
+        if "红" in text or "red" in low:
+            if "球" in text or "ball" in low:
+                add("red_ball_01", "red ball", "ball", "red")
+            else:
+                add("red_cube_01", "red cube", "cube", "red")
+        if ("蓝" in text or "blue" in low) and not any(
+            token in text or token in low
+            for token in ("柜门", "上层", "cabinet door", "upper compartment")
+        ):
+            add("blue_box_01", "blue box", "container", "blue")
         if "黄" in text or "yellow" in low: add("yellow_cube_01", "yellow cube", "cube", "yellow")
         if ("盒" in text or "box" in low) and not any(entity.category == "container" for entity in entities):
             add("open_box_01", "open box", "container", None)
         if "按钮" in text or "button" in low: add("button_01", "button", "button")
+        if "柜门" in text or "cabinet door" in low:
+            add("cabinet_door_01", "blue cabinet door", "door", "blue")
+            add("cabinet_handle_01", "blue cabinet handle", "handle", "blue")
+        if "上层" in text or "upper compartment" in low:
+            add(
+                "upper_compartment_01",
+                "blue cabinet upper compartment",
+                "container",
+                "blue",
+            )
         for token, name, category in (("苹果", "apple", "fruit"), ("香蕉", "banana", "fruit"), ("棒球", "baseball", "ball"), ("魔方", "rubiks cube", "cube"), ("海绵", "sponge", "sponge"), ("勺子", "spoon", "utensil"), ("糖盒", "sugar box", "package")):
             if token in text or token in low:
                 add(f"{name.replace(' ', '_')}_01", name, category)
@@ -66,10 +84,22 @@ class FakeTaskUnderstandingProvider:
         if "最远" in text or "farthest" in low:
             relations.append(ParseRelation(scope="selection", subject=entities[0].id, relation=SpatialRelationType.FARTHEST, reference=entities[-1].id))
         for tokens, relation in ((("前", "north", "front"), SpatialRelationType.FRONT), (("后", "south", "back"), SpatialRelationType.BACK), (("上", "above", "up"), SpatialRelationType.UP), (("下", "below", "down"), SpatialRelationType.DOWN)):
-            if any(token in text or token in low for token in tokens) and not (relation == SpatialRelationType.BACK and "然后" in text):
+            if (
+                any(token in text or token in low for token in tokens)
+                and not (relation == SpatialRelationType.BACK and "然后" in text)
+                and not (relation == SpatialRelationType.UP and "上层" in text)
+            ):
                 relations.append(ParseRelation(scope="selection", subject=entities[0].id, relation=relation))
 
         operations: list[ParseOperation] = []
+        door = next((entity for entity in entities if entity.category == "door"), None)
+        handle = next((entity for entity in entities if entity.category == "handle"), None)
+        open_requested = any(token in text or token in low for token in ("打开", "开启", "open"))
+        close_requested = any(token in text or token in low for token in ("关闭", "关上", "close"))
+        if open_requested and door is not None and handle is not None:
+            operations.append(
+                ParseOperation(type="open", target=door.id, reference=handle.id)
+            )
         # Preserve entity reuse in simple chained pick-and-place language such
         # as “把 A 放进 B，再把 B 放进 C”.  Roles are local to each operation.
         letters = [entity for entity in entities if entity.category == "object" and entity.id.endswith("_01")]
@@ -97,6 +127,10 @@ class FakeTaskUnderstandingProvider:
                 else:
                     operations.append(ParseOperation(type="pick_and_place", source=source.id, destination=destination.id))
                     relations.append(ParseRelation(scope="goal", subject=source.id, relation=SpatialRelationType.INSIDE, reference=destination.id))
+        if close_requested and door is not None and handle is not None:
+            operations.append(
+                ParseOperation(type="close", target=door.id, reference=handle.id)
+            )
         if any(token in text or token in low for token in ("按", "press")):
             button = next((entity for entity in entities if entity.category == "button"), entities[-1])
             operations.append(ParseOperation(type="press", target=button.id))

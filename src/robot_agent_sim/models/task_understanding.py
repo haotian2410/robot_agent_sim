@@ -20,7 +20,17 @@ class ParseEntity(StrictModel):
 
 
 class ParseOperation(StrictModel):
-    type: Literal["locate", "search", "move", "grasp", "release", "pick_and_place", "press"]
+    type: Literal[
+        "locate",
+        "search",
+        "move",
+        "grasp",
+        "release",
+        "pick_and_place",
+        "press",
+        "open",
+        "close",
+    ]
     source: str | None = None
     destination: str | None = None
     target: str | None = None

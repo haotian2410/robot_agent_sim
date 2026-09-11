@@ -4,7 +4,8 @@ import json
 
 
 TASK_UNDERSTANDING_PROMPT = """解析机器人任务，只输出规定 JSON。
-支持 locate/search/move/grasp/release/pick_and_place/press。
+支持 locate/search/move/grasp/release/pick_and_place/press/open/close。
+open/close 的 target 是门或抽屉，reference 是对应把手；不要把 open/close 当成底层控制指令。
 方向仅 left/right/front/back/up/down；东=right、西=left、南=back、北=front。
 东北、左前方、斜上方等返回 direction_clarification_required；不支持的任务返回 unsupported_task。
 禁止 explanation、operation_id、XYZ、object_id、模型信息、技能步骤和 task_types。"""

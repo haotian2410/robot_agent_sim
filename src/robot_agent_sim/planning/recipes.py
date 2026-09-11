@@ -34,11 +34,32 @@ def _release(operation):
     return [("locate", target, None, None), ("release", target, "reference" if operation.reference else None, "semantic_region")]
 
 
+def _open(operation):
+    return [
+        ("locate", "reference", None, None),
+        ("move", "reference", None, "grasp_region"),
+        ("grasp", "reference", None, None),
+        ("pull", "target", "reference", None),
+        ("release", "reference", None, None),
+    ]
+
+
+def _close(operation):
+    return [
+        ("locate", "reference", None, None),
+        ("move", "reference", None, "grasp_region"),
+        ("grasp", "reference", None, None),
+        ("push", "target", "reference", None),
+        ("release", "reference", None, None),
+    ]
+
+
 RECIPE_DEFINITIONS = {
     "grasp": RecipeDefinition("grasp", _grasp), "press": RecipeDefinition("press", _press),
     "pick_and_place": RecipeDefinition("pick_and_place", _pick_and_place), "locate": RecipeDefinition("locate", _locate),
     "search": RecipeDefinition("search", _search), "move": RecipeDefinition("move", _move),
     "release": RecipeDefinition("release", _release),
+    "open": RecipeDefinition("open", _open), "close": RecipeDefinition("close", _close),
 }
 
 def validate_plan(plan, task) -> None:

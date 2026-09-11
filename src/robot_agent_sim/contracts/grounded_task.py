@@ -13,7 +13,9 @@ class GroundedEntity(BaseModel):
     body_name: str | None = None
     model_id: str | None = None
     model_name: str | None = None
-    grounding_method: Literal["asset_scene_binding", "vlm_iou", "detector_iou"]
+    grounding_method: Literal[
+        "asset_scene_binding", "vlm_iou", "detector_iou", "interaction_registry"
+    ]
     detection_bbox: tuple[int, int, int, int] | None = None
     instance_bbox: tuple[int, int, int, int] | None = None
     bbox_iou: float | None = Field(default=None, ge=0, le=1)
