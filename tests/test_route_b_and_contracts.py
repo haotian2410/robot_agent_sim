@@ -144,6 +144,68 @@ def test_qwen_structured_output_modes(monkeypatch, mode, has_response_format):
         assert "只输出一个 JSON 对象，不要 markdown 或额外文字。" in payload["messages"][0]["content"]
 
 
+def test_qwen_http_pipeline_level4_shape_with_local_transport(monkeypatch, tmp_path):
+    """Exercise task -> vision -> skill planning through the real HTTP adapter.
+
+    The transport is local and deterministic; this verifies the same request
+    and response contracts used by a real Qwen-compatible server without
+    pretending that a real model endpoint is available in CI.
+    """
+    responses = {
+        "task_understanding": {
+            "status": "accepted",
+            "entities": [{"id": "button_01", "name": "red button", "category": "button", "color": "red"}],
+            "operations": [{"type": "press", "target": "button_01"}],
+            "relations": [],
+        },
+        "vision_grounding": {
+            "detections": [{"entity": "button_01", "bbox": [710, 412, 867, 525]}],
+        },
+        "skill_planning": {
+            "operations": [{"id": "op-1", "steps": [
+                {"skill": "locate", "target": "target"},
+                {"skill": "move", "target": "target", "region": "button_surface"},
+                {"skill": "press", "target": "target"},
+            ]}],
+        },
+    }
+
+    class Response:
+        status_code = 200
+
+        def __init__(self, body):
+            self.body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": json.dumps(self.body)}}], "usage": {"prompt_tokens": 5, "completion_tokens": 7}}
+
+    calls = []
+
+    def fake_post(url, **kwargs):
+        calls.append(kwargs["json"])
+        stage = kwargs["json"]["response_format"]["json_schema"]["name"]
+        return Response(responses[stage])
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setenv("MUJOCO_GL", "egl")
+    monkeypatch.setenv("PYOPENGL_PLATFORM", "egl")
+    provider = QwenHTTPProvider("http://local-mock/v1", "qwen-test")
+    result = PipelineEngine(understanding=provider, vision=provider, planner=provider).plan(
+        "按红色按钮", robot="ur5e", scene=SCENE_003,
+        planner="qwen", output_dir=tmp_path,
+    )
+    assert result.status == "accepted"
+    assert result.route == "B"
+    assert result.planner == "qwen"
+    assert result.model_call_count == 3
+    assert [step["skill_name"] for step in result.skill_plan["steps"]] == ["locate", "move", "press"]
+    assert [item["stage"] for item in provider.calls] == ["task_understanding", "vision_grounding", "skill_planning"]
+    assert len(calls) == 3
+
+
 def test_skill_plan_rejects_unknown_target_and_wrong_order():
     from robot_agent_sim.contracts.skill_plan import SkillPlan, SkillStep
     from robot_agent_sim.planning.recipes import validate_plan
