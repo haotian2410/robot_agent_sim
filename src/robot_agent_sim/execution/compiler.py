@@ -29,8 +29,16 @@ def compile_execution_bundle(
     route: str,
     robot: str = "ur5e",
 ) -> ExecutionBundle:
-    from robot_agent_control import CommandDocument, ExecutionOptions, SkillCommand
-    from robot_agent_control.contracts import scene_sha256
+    try:
+        from robot_agent_control import CommandDocument, ExecutionOptions, SkillCommand
+        from robot_agent_control.contracts import scene_sha256
+    except ModuleNotFoundError as exc:
+        if exc.name and exc.name.startswith("robot_agent_control"):
+            raise ValueError(
+                "control dependency is not installed; run "
+                "python -m pip install -e /home/cscvlab/lht/robot-agent-control"
+            ) from exc
+        raise
 
     if robot != "ur5e":
         raise ValueError("control execution currently supports ur5e only")
@@ -159,4 +167,3 @@ def compile_directory(
         route=str(summary["route"]),
         robot=str(json.loads((directory / "scene_registry.json").read_text(encoding="utf-8"))["robot"]),
     )
-
