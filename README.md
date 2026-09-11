@@ -1,5 +1,48 @@
 # robot-agent-sim
 
+## 总体部署入口
+
+这是 `robot-agent-sim × robot-agent-control` 双仓库系统的上层仓库。完整整合说明请先看
+[INTEGRATION.md](INTEGRATION.md)。部署时通常需要两个仓库：
+
+| 仓库 | 负责内容 | 是否必须 |
+|---|---|---|
+| `robot_agent_sim` | 自然语言、Route A/Route B、场景/模型检索、Qwen、SkillPlan、命令编译 | 是 |
+| `robot-agent-control` | `ControlExecutor`、IK、夹爪、MuJoCo runtime、执行报告 | 需要运行 MuJoCo/机器人控制时是 |
+
+两者安装在同一个 `robot_agent_integ` Conda 环境中；不需要合并源码，也不要把控制代码复制进
+sim。只做离线规划时可以只安装本仓库；要执行 `config_001` 或 `robot-agent-sim run`，安装两个仓库。
+
+最小安装：
+
+```bash
+conda create -n robot_agent_integ --clone robot_agent
+conda activate robot_agent_integ
+python -m pip install -e /home/cscvlab/lht/robot-agent-control
+python -m pip install -e /home/cscvlab/lht/robot_agent_sim
+```
+
+启动顺序：先启动本地 Qwen（若使用真实模型），再运行 sim 的 `plan`/`run`；`compile` 和
+`execute` 不需要 Qwen。第一阶段执行后端是 UR5e，Panda 保留规划能力。
+
+```bash
+# 真实 Qwen（可选）
+cd /home/cscvlab/lht/robot_agent
+./scripts/start_qwen38_vlm.sh
+
+# Route A：自动生成场景
+robot-agent-sim run "把红色方块放进蓝色盒子" \
+  --provider qwen --qwen-base-url http://127.0.0.1:8080/v1 \
+  --qwen-model Qwen3.8-27B --robot ur5e --viewer-mode headless
+
+# Route B：使用已有 MuJoCo 场景和 sidecar registry
+robot-agent-sim run "打开柜门，把红球放到柜子上层，然后关闭柜门" \
+  --scene /home/cscvlab/lht/robot-agent-control/world_model/robotsim/scene_001.xml \
+  --interaction-registry /home/cscvlab/lht/robot-agent-control/demo/common/scenes/scene_001.interactions.json \
+  --provider qwen --qwen-base-url http://127.0.0.1:8080/v1 \
+  --qwen-model Qwen3.8-27B --robot ur5e --viewer-mode headless
+```
+
 `robot-agent-sim` 是一个只做任务理解、场景语义对齐和技能规划的 Python 项目。它接收中文或英文自然语言，输出 `TaskIntent`、对象绑定结果和 `SkillPlan`。当前命令不会让 Panda 或 UR5e 执行动作，也不做 IK、轨迹规划、碰撞规划或真实机器人控制。
 
 主链路固定为：
