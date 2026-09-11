@@ -122,6 +122,11 @@ class SceneComposer:
         dimensions = asset.dimensions_m or _primitive_dimensions(asset.model_name)
         position = self._position(entity.entity_id, dimensions, existing, rng, intent, preferred)
         base = _slug(entity.semantic_name or asset.model_name)
+        if base == "scene_object":
+            # Non-Latin semantic names collapse to the generic slug.  Prefer
+            # the model-provided stable entity id so two Chinese entities do
+            # not both become scene_object_01.
+            base = _slug(entity.entity_id or asset.model_name)
         object_id = f"{base}_{index:02d}"
         return SceneObject(object_id=object_id, body_name=object_id, role="task_object",
                            semantic_name=entity.semantic_name, position=position, dimensions_m=dimensions,
