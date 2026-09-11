@@ -72,9 +72,12 @@ class QwenHTTPProvider:
                 }
             elif self.use_structured_output == "json_object":
                 payload["response_format"] = {"type": "json_object"}
+            headers = {}
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
             response = httpx.post(
                 f"{self.base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
+                headers=headers,
                 json=payload,
                 timeout=self.timeout,
             )
