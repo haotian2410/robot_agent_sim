@@ -35,7 +35,10 @@ class QwenHTTPProvider:
         self.timeout = timeout
         self.calls: list[dict[str, Any]] = []
         self.stage_max_completion_tokens = stage_max_completion_tokens or {
-            "task_understanding": 256, "vision_grounding": 384, "skill_planning": 512,
+            # Chained open/pick/place/close tasks can contain several entity
+            # and operation records.  256 tokens truncates valid JSON from
+            # local Qwen before the outer object is closed.
+            "task_understanding": 768, "vision_grounding": 384, "skill_planning": 512,
         }
         self.stage_generation = stage_generation or {}
         self.use_structured_output = "json_object" if use_structured_output is True else ("off" if use_structured_output is False else use_structured_output)
