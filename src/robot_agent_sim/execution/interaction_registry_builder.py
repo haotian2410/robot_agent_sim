@@ -119,7 +119,11 @@ def build_generated_registry(
                     "button_surface": {
                         "target_id": f"{item.object_id}_surface",
                         "aliases": ["button surface", "按钮表面", "按压点"],
-                        "local_position": [0.0, 0.0, 0.044],
+                        # Stop above the physical cap.  The press controller
+                        # owns the final displacement; placing the move pose
+                        # directly in the button geom is rejected as a local
+                        # collision during preflight.
+                        "local_position": [0.0, 0.0, 0.10],
                     }
                 },
             })
@@ -129,7 +133,7 @@ def build_generated_registry(
                     "target": {
                         "type": "button",
                         "object_id": item.object_id,
-                        "surface_normal": [0.0, 0.0, 1.0],
+                        "surface_normal": [0.0, 0.0, -1.0],
                     },
                     "press": {
                         "strategy": "displacement_press",
@@ -141,7 +145,7 @@ def build_generated_registry(
                     },
                     "constraints": {
                         "maximum_force": 100.0,
-                        "maximum_travel": 0.05,
+                        "maximum_travel": 0.10,
                         "contact_threshold": 0.2,
                         "press_speed": 0.01,
                         "retract_speed": 0.03,
@@ -153,7 +157,7 @@ def build_generated_registry(
                         "emergency_retract": True,
                     },
                     "strategy_params": {
-                        "press_depth": 0.02,
+                        "press_depth": 0.06,
                         "stop_on_contact": False,
                     },
                 }

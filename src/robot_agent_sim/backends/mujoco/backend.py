@@ -73,6 +73,20 @@ class MujocoSceneBackend:
         # containers and buttons remain static scene geometry.
         if record.model_name not in {"open_box", "button_basic"}:
             ET.SubElement(body, "freejoint", name=f"{item.object_id}_free")
+        elif record.model_name == "button_basic":
+            # A generated button has a passive travel joint so the control
+            # press profile can depress and restore it without inventing an
+            # actuator or sensor.
+            ET.SubElement(
+                body,
+                "joint",
+                name=f"{item.object_id}_slide",
+                type="slide",
+                axis="0 0 1",
+                limited="true",
+                range="-0.02 0",
+                damping="1",
+            )
         if record.source == "mesh":
             minimum = record.bbox_min_m or (0.0, 0.0, 0.0)
             maximum = record.bbox_max_m or dimensions
@@ -92,7 +106,7 @@ class MujocoSceneBackend:
         elif record.model_name == "open_box":
             x, y, h = dimensions; t = 0.008
             for name, pos, size in (("floor", (0,0,t/2), (x/2,y/2,t/2)), ("left", (-x/2+t/2,0,h/2), (t/2,y/2,h/2)), ("right", (x/2-t/2,0,h/2), (t/2,y/2,h/2)), ("front", (0,y/2-t/2,h/2), (x/2,t/2,h/2)), ("back", (0,-y/2+t/2,h/2), (x/2,t/2,h/2))): ET.SubElement(body, "geom", name=f"{item.object_id}_{name}", type="box", pos=" ".join(str(v) for v in pos), size=" ".join(str(v) for v in size), rgba=_rgba(item.semantic_name))
-        else: ET.SubElement(body, "geom", name=f"{item.object_id}_button", type="cylinder", size="0.025 0.012", pos="0 0 0.032", rgba="0.8 0.1 0.1 1")
+        else: ET.SubElement(body, "geom", name=f"{item.object_id}_button", type="cylinder", size="0.05 0.012", pos="0 0 0.032", rgba="0.8 0.1 0.1 1")
     @staticmethod
     def _discover_objects(root):
         """Discover task objects without treating robot internals as objects.

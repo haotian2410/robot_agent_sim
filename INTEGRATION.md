@@ -28,7 +28,7 @@ robot-agent-sim run "把红色方块放进蓝色盒子" --robot ur5e --viewer-mo
 
 ## Route A / Route B
 
-* Route A（不传 `--scene`）自动生成最终 `scene.xml` 和简单物体/盒子/按钮的 `interaction_registry.json`。普通可抓物体使用 free joint，以便 control 在同一 runtime 中持久携带；柜门/抽屉等机构不会由几何猜测。
+* Route A（不传 `--scene`）自动生成最终 `scene.xml` 和简单物体/盒子/按钮的 `interaction_registry.json`。普通可抓物体使用 free joint，以便 control 在同一 runtime 中持久携带；按钮会生成规范化 press metadata，但可靠按压验证仍要求场景提供可检测的机构/传感器；柜门/抽屉等机构不会由几何猜测。
 * Route B（传 `--scene`）优先使用同目录的 `<scene-stem>.interactions.json`，也可用 `--interaction-registry` 指定 sidecar。已知 sidecar 会校验 scene SHA-256 和 MuJoCo 的 body/site/joint/geom；没有执行元数据时仍可完成 VLM+IoU 规划，但 compile 会安全地返回 `execution_metadata_missing`。
 
 每个任务目录会保存 `task_intent.json`、`scene_registry.json`、`grounded_task.json`、`skill_plan.json`、`interaction_registry.json`、`commands.json`、`execution_bundle.json`、`execution_report.json` 和 `skill_trace.jsonl`。`SKILL.md` 是面向 LLM/开发者的说明；运行时使用 Python skill catalog 和 versioned command contract，不在每次执行时解析 Markdown。
