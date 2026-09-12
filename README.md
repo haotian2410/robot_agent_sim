@@ -1,5 +1,7 @@
 # robot-agent-sim
 
+> **Moved:** active development has moved to [`haotian2410/robot_agent_stack`](https://github.com/haotian2410/robot_agent_stack). This repository is retained as a compatibility/frozen source; new features and fixes belong in the monorepo.
+
 ## 总体部署入口
 
 这是 `robot-agent-sim × robot-agent-control` 双仓库系统的上层仓库。完整整合说明请先看
